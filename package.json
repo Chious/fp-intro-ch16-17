@@ -14,7 +14,9 @@
     "vue": "^3.5.16"
   },
   "devDependencies": {
+    "@unocss/vite": "^66.3.1",
     "prettier": "3.6.1",
-    "prettier-plugin-slidev": "^1.0.5"
+    "prettier-plugin-slidev": "^1.0.5",
+    "unocss": "^66.3.1"
   }
 }
