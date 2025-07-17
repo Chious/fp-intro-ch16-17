@@ -65,22 +65,26 @@ const handleStationChange = (option) => {
   </div>
   
   <div style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8f9fa; min-width: 150px;">
-    <pre v-if="selectedObject" style="margin: 8px 0 0 0; font-size: 12px; color: #000; overflow-y: scroll; max-height: 49px;">{{ JSON.stringify(selectedObject, null, 2) }}</pre>
+    <pre v-if="selectedObject" style="margin: 8px 0 0 0; font-size: 12px; color: #000;">{{ JSON.stringify(selectedObject, null, 2) }}</pre>
     <span v-else style="color: #718096; font-style: italic;">尚未選擇</span>
   </div>
 </div>
 
-### 時間線的設計原則
-
-1. 時間線數量越少越好
-2. 時間線上的步驟越少越好
-3. 資源共享越少越好
-4. 協調有共享資源的時間線
-5. 更改程式的時間模型
-
 ::right::
 
 <img src="/f0449-02.jpg" alt="時間線範例">
+
+---
+
+# 時間線的設計原則
+
+| 原則                      | 說明                                     | 範例         |
+| ------------------------- | ---------------------------------------- | ------------ |
+| ✅ 時間線數量越少越好     | 時間線數量越少，程式碼越容易理解         | 重構 Actions |
+| ✅ 時間線上的步驟越少越好 | 時間線上的步驟越少，程式碼越容易理解     | 重構 Actions |
+| ✅ 資源共享越少越好       | 資源共享越少，程式碼越容易理解           | 全域 -> 區域 |
+| 👉 協調有共享資源的時間線 | 協調有共享資源的時間線，程式碼越容易理解 | 套用事件佇列 |
+| 更改程式的時間模型        | 更改程式的時間模型，程式碼越容易理解     |              |
 
 ---
 layout: two-cols
@@ -110,18 +114,6 @@ function calc_cart_total(cart, callback) {
 ::right::
 
 <img src="/add-shipping-cart.png" alt="購物車畫面">
-
----
-
-# 仍然有些原則是我們沒提到的
-
-| 原則                      | 說明                                     | 範例         |
-| ------------------------- | ---------------------------------------- | ------------ |
-| ✅ 時間線數量越少越好     | 時間線數量越少，程式碼越容易理解         | 重構 Actions |
-| ✅ 時間線上的步驟越少越好 | 時間線上的步驟越少，程式碼越容易理解     | 重構 Actions |
-| ✅ 資源共享越少越好       | 資源共享越少，程式碼越容易理解           | 全域 -> 區域 |
-| 👉 協調有共享資源的時間線 | 協調有共享資源的時間線，程式碼越容易理解 | 套用事件佇列 |
-| 更改程式的時間模型        | 更改程式的時間模型，程式碼越容易理解     |              |
 
 ---
 layout: center
@@ -554,6 +546,8 @@ graph TD
     style E3 fill:#d1fae5
 ```
 
+- [Visualizing algorithms for rate limiting](https://smudge.ai/blog/ratelimit-algorithms)
+
 </div>
 
 </div>
@@ -589,6 +583,10 @@ graph TD
 - 真正需要的只是最終搜尋結果
 
 </div>
+
+## 回家練習
+
+- [前往 Google 文件](https://g.co/kgs/sGbcYRs)
 
 ---
 
@@ -688,70 +686,453 @@ document.getElementById("search").addEventListener("input", (e) => {
 2. 什麼是 並行語言（Concurrency primitives）？
 
 ---
+layout: center
+---
 
-## Ch17. 協調時間線
+# Ch17. 協調時間線
 
-先前的流程圖
+---
+
+## 章節回顧
+
+| 原則                      | 說明                                     | 範例                   |
+| ------------------------- | ---------------------------------------- | ---------------------- |
+| ✅ 時間線數量越少越好     | 時間線數量越少，程式碼越容易理解         | 重構 Actions           |
+| ✅ 時間線上的步驟越少越好 | 時間線上的步驟越少，程式碼越容易理解     | 重構 Actions           |
+| ✅ 資源共享越少越好       | 資源共享越少，程式碼越容易理解           | 全域 -> 區域           |
+| ✅ 協調有共享資源的時間線 | 協調有共享資源的時間線，程式碼越容易理解 | 套用事件佇列           |
+| 👉 更改程式的時間模型     | 更改程式的時間模型，程式碼越容易理解     | Concurrency Primitives |
+
+---
+
+## 17.2 新 BUG!!!
+
+- 剛剛我們解決了 Race Condition 的問題
+- BUT: 有時候會觸發計算運費、有時候不會，這是為什麼？
+
+<script setup>
+  import Cart_Bug from '/components/Cart_Bug.vue'
+</script>
+
+<div style="margin: 20px 0;">
+  <Cart_Bug />
+</div>
+
+<p style="font-size: 0.8em; color: gray;">Murmur: Code Quality 太差了吧！請在 CI/CD 新增 test_stage，確保成功通過 Unit Test / E2E 才能合併！</p>
+
+---
+layout: two-cols
+---
+
+## 17.3 New Ticket!
+
+### 🚨 ㄧ、問題敘述
+
+> 問題：購物車的總金額會算錯運費，導致 UI 顯示不正確
+
+### 🔍 二、問題重現
+
+> 1. **一開始購物車是空的**
+> 2. **點擊加入購物車**
+> 3. **顯示費用 100 元（貨物） + 50 元（運費）= 150 元 （總金額）** -> ✅ **正常**
+> 4. **再次加入購物車，卻顯示 200 元** -> 😭 **金額異常**
+
+### ⏱️ 三、時間:
+
+今天 16:00 前
+
+### 💡 四、備註：
+
+1. 修改完請回報 @PM、@ 喬治 Thanks :)
+2. 需通過測試案例
+
+::right::
+
+<img src="/george.jpg" alt="想回家的喬治" style=" width: 100%;">
+
+---
+layout: two-cols
+---
+
+### 修改前（Working）
+
+```js
+function add_item_to_cart(item) {
+  cart = add_item(cart, item);
+  update_total_queue(cart);
+}
+function calc_cart_total(cart, callback) {
+  var total = 0;
+  cost_ajax(cart, function (cost) {
+    total += cost;
+    shipping_ajax(cart, function (shipping) {
+      total += shipping;
+      callback(total);
+    });
+  });
+}
+function calc_cart_worker(cart, done) {
+  calc_cart_total(cart, function (total) {
+    update_total_dom(total);
+    done(total);
+  });
+}
+var update_total_queue = DroppingQueue(1, calc_cart_worker);
+```
+
+::right::
+
+### 修改後（Not Working）
+
+```js
+function add_item_to_cart(item) {
+  cart = add_item(cart, item);
+  update_total_queue(cart);
+}
+function calc_cart_total(cart, callback) {
+  var total = 0;
+  cost_ajax(cart, function (cost) {
+    total += cost;
+  });
+  shipping_ajax(cart, function (shipping) {
+    total += shipping;
+    callback(total);
+  });
+}
+function calc_cart_worker(cart, done) {
+  calc_cart_total(cart, function (total) {
+    update_total_dom(total);
+    done(total);
+  });
+}
+var update_total_queue = DroppingQueue(1, calc_cart_worker);
+```
+
+---
+
+# Q: 哪些是 Actions ?
+
+---
+
+## 17.4 ~ 17.6 分析時間軸
+
+- 步驟1：辨識 Actions
+
+```js{all|3-4,6-13,17}
+function add_item_to_cart(item) {
+  cart = add_item(cart, item);
+  update_total_queue(cart); // Action: 事件佇列
+}
+function calc_cart_total(cart, callback) {
+  var total = 0; // Action: 區域變數
+  cost_ajax(cart, function (cost) { // Action: API 呼叫
+    total += cost;
+  });
+  shipping_ajax(cart, function (shipping) { // Action: API 呼叫
+    total += shipping; // Action: total 區域變數
+    callback(total); // Action: total 區域變數
+  });
+}
+function calc_cart_worker(cart, done) {
+  calc_cart_total(cart, function (total) {
+    update_total_dom(total); // Action: DOM 操作
+    done(total);
+  });
+}
+
+var update_total_queue = DroppingQueue(1, calc_cart_worker);
+```
+
+---
+
+## 步驟2：將 Actions 的時間軸畫出來
+
+```js{all}
+function add_item_to_cart(item) {
+  cart = add_item(cart, item);     // 1. 讀取 Cart, 2. 寫入 Cart
+  update_total_queue(cart);        // 3. 讀取 Cart, 4. 呼叫 update_total_queue()
+}
+function calc_cart_total(cart, callback) {
+  var total = 0;                   // 5. 初始化 total = 0
+  cost_ajax(cart, function (cost) { // 6. 呼叫 cost_ajax()
+    total += cost;                 // 7. 讀取 total, 8. 寫入 total
+  });
+  shipping_ajax(cart, function (shipping) { // 9. 呼叫 shipping_ajax()
+    total += shipping;             // 10. 讀取 total, 11. 寫入 total
+    callback(total);               // 12. 呼叫 total
+  });
+}
+function calc_cart_worker(cart, done) {
+  calc_cart_total(cart, function (total) {
+    update_total_dom(total);       // 13. 呼叫 update_total_dom()
+    done(total);
+  });
+}
+
+var update_total_queue = DroppingQueue(1, calc_cart_worker);
+```
+
+---
+layout: two-cols
+---
+
+## 程式碼-1
+
+```js{all}
+function add_item_to_cart(item) {
+  cart = add_item(cart, item);     // 1. 讀取 Cart, 2. 寫入 Cart
+  update_total_queue(cart);        // 3. 讀取 Cart, 4. 呼叫 update_total_queue()
+}
+function calc_cart_total(cart, callback) {
+  var total = 0;                   // 5. 初始化 total = 0
+  cost_ajax(cart, function (cost) { // 6. 呼叫 cost_ajax()
+    total += cost;                 // 7. 讀取 total, 8. 寫入 total
+  });
+  shipping_ajax(cart, function (shipping) { // 9. 呼叫 shipping_ajax()
+    total += shipping;             // 10. 讀取 total, 11. 寫入 total
+    callback(total);               // 12. 呼叫 total
+  });
+}
+function calc_cart_worker(cart, done) {
+  calc_cart_total(cart, function (total) {
+    update_total_dom(total);       // 13. 呼叫 update_total_dom()
+    done(total);
+  });
+}
+
+var update_total_queue = DroppingQueue(1, calc_cart_worker);
+```
+
+::right::
+
+## 時間軸
 
 ```plantuml
 @startuml
-start
-: 讀取 Cart \n 寫入 Cart \n 讀取 Cart \n cost_ajax();
-: shipping_ajax();
-: 更新 DOM;
-end
+!theme plain
+title 購物車執行序列圖
+
+participant "點擊處理器" as Click
+participant "佇列" as Queue
+participant "cost_ajax()" as Cost
+
+Click -> Click: 讀取 Cart
+Click -> Click: 寫入 Cart
+Click -> Click: 讀取 Cart
+Click -> Queue: update_total_queue()
+
+Queue -> Queue: 初始化 total
+Queue -> Cost: cost_ajax()
+
+Cost -> Cost: 讀取 total
+Cost -> Cost: 寫入 total
+
 @enduml
 ```
 
-> 這邊要講重構的流程
+---
+layout: two-cols
+---
 
-```js
+## 程式碼-2
+
+```js{all,10-22}
 function add_item_to_cart(item) {
-  cart = add_item(cart, item);
-  calc_cart_total(cart, update_total_dom);
+  cart = add_item(cart, item);     // 1. 讀取 Cart, 2. 寫入 Cart
+  update_total_queue(cart);        // 3. 讀取 Cart, 4. 呼叫 update_total_queue()
 }
 function calc_cart_total(cart, callback) {
-  var total = 0;
-  cost_ajax(cart, function (cost) {
-    total += cost;
-    shipping_ajax(cart, function (shipping) {
-      total += shipping;
-      callback(total);
-    });
+  var total = 0;                   // 5. 初始化 total = 0
+  cost_ajax(cart, function (cost) { // 6. 呼叫 cost_ajax()
+    total += cost;                 // 7. 讀取 total, 8. 寫入 total
+  });
+  shipping_ajax(cart, function (shipping) { // 9. 呼叫 shipping_ajax()
+    total += shipping;             // 10. 讀取 total, 11. 寫入 total
+    callback(total);               // 12. 呼叫 total
   });
 }
-```
-
-### 讓點擊處理器就能將商品加入佇列
-
-```js
-function add_item_to_cart(item) {
-  cart = add_item(cart, item);
-  calc_cart_total(cart, update_total_dom);
-}
-
-function calc_cart_total(cart, callback) {
-  var total = 0;
-  cost_ajax(cart, function (cost) {
-    total += cost;
-    shipping_ajax(cart, function (shipping) {
-      total += shipping;
-      callback(total);
-    });
+function calc_cart_worker(cart, done) {
+  calc_cart_total(cart, function (total) {
+    update_total_dom(total);       // 13. 呼叫 update_total_dom()
+    done(total);
   });
 }
 
-var queue_items = [];
+var update_total_queue = DroppingQueue(1, calc_cart_worker);
+```
 
-function update_total_queue(total) {
-  queue_items.push(total);
+::right::
+
+```plantuml
+@startuml
+!theme plain
+title 購物車執行序列圖
+
+participant "點擊處理器" as Click
+participant "佇列" as Queue
+participant "cost_ajax()" as Cost
+participant "shipping_ajax()" as Shipping
+
+Click -> Click: 讀取 Cart
+Click -> Click: 寫入 Cart
+Click -> Click: 讀取 Cart
+Click -> Queue: update_total_queue()
+
+Queue -> Queue: 初始化 total
+Queue -> Cost: cost_ajax()
+
+Cost -> Cost: 讀取 total
+Cost -> Cost: 寫入 total
+Cost -> Queue: shipping_ajax()
+
+Queue -> Shipping :
+Shipping -> Shipping: 讀取 total
+Shipping -> Shipping: 寫入 total
+Shipping -> Shipping: 讀取 total
+Shipping -> Shipping: update_total_dom()
+
+@enduml
+```
+
+---
+layout: two-cols
+---
+
+## 簡化步驟1
+
+<img src="/f0481-01.jpg" alt="簡化時間軸" style="width: 100%; object-fit: contain;">
+
+::right::
+
+## 💡 Tips
+
+- 如果是連續的 Action，可以簡化成一個時間軸
+
+---
+layout: two-cols
+---
+
+## 簡化步驟1
+
+<img src="/f0481-01.jpg" alt="簡化時間軸" style="width: 100%; object-fit: contain;">
+
+::right::
+
+## 簡化步驟2
+
+<img src="/f0483-01.jpg" alt="簡化時間軸2" style="width: 100%; object-fit: contain;">
+
+> 💡 由於這幾條時間線都共用 `total` 變數，所以可以簡化
+
+---
+layout: two-cols
+---
+
+## 17.9 時間線圖分析
+
+<img src="/f0483-01.jpg" alt="簡化時間軸2" style="width: 100%; object-fit: contain;">
+
+::right::
+
+- 由於所有時間軸都共用 `total` 變數，因此會產生時間上的 Race Condition
+
+---
+
+## 17.10 實現 Concurrency Primitives
+
+> Concurrency Primitives 是一組工具或機制，用於幫助開發者在並行程式中管理共享資源的存取，並協調不同執行緒或行程之間的行為。它們提供了一種方式來控制執行順序，避免競爭條件，並確保資料的一致性。
+
+- 你和朋友正在忙著不同的工作，但是你想一起吃午餐，如果約定『先完成的人等待後完成的人』，就可以保證無論誰先完成，最後都能一起吃午餐。
+
+<section class="grid grid-cols-2 gap-4">
+
+<div>
+
+### 使用 `Cut()`
+
+```js
+function Cut(number, callback) {
+  var num_finished = 0;
+  return function () {
+    num_finished++;
+    if (num_finished === number) {
+      callback();
+    }
+  };
 }
 ```
 
-### 從佇列前端取出處理的項目
+</div>
+
+<div>
+
+### 範例
+
+```js
+var done = Cut(3, function () {
+  console.log("好誒！今天吃烤雞！");
+});
+```
+
+```js
+done();
+done();
+done();
+```
+
+</div>
+
+</section>
+
+---
+
+## 17.11 在『放入購物車』程式裡應用 Cut()
+
+## 17.15 讓 Action 只能執行一次 primitive
+
+## 17.16 隱性 vs 顯性時間模型
+
+TBD
+
+---
+
+# 17.17 小結：操作時間線的技巧
+
+### 1. 減少時間線的數量
+
+### 2. 減少時間線上的 Actions 的數量
+
+### 3. 減少共享的資源
+
+### 4. 利用 Concurrency primitives 來共享資源
+
+### 5. 利用 Concurrency primitives 協調時間線
+
+---
+
+# 下週預告
+
+- Ch18. 反應式設計與洋蔥架構
+- Ch19. 踏上函數式設計之途
+
+---
+
+## RE: 上禮拜的小尾巴
+
+> 分層設計回過頭來，都是在處理時間線的問題。
+
+<img src="/developer-guide-kotlin.png" alt="上禮拜的小尾巴" style="width: 100%; object-fit: contain;">
+
+---
+
+## Murmur
+
+- 後端指的『高併發』、與前端的狀況一樣嗎？
 
 ---
 
 # 參考資料
 
-1. 電子書：https://livebook.manning.com/book/grokking-simplicity/chapter-16#1
+- 電子書：https://livebook.manning.com/book/grokking-simplicity/chapter-16#1
+
+- [Visualizing algorithms for rate limiting](https://smudge.ai/blog/ratelimit-algorithms)
