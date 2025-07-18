@@ -7,8 +7,10 @@ background: https://cover.sli.dev
 
 # 《簡約的軟體開發思維：用 Functional Programming 重構程式》CH16 ~ CH17
 
-<div @click="$slidev.nav.next" class="mt-12 py-1" hover:bg="white op-10">
-  Press Space for next page <carbon:arrow-right />
+<div>
+  Present at Tech Book Community 2025/07/24 
+  <br/>
+  Sam Chiou
 </div>
 
 <div class="abs-br m-6 text-xl">
@@ -314,26 +316,6 @@ graph LR
 layout: two-cols
 ---
 
-## 名詞解釋
-
-### 📦 `cost_ajax(cart, function (cost) {...})`
-
-- 意思是「用 cart 當作參數，非同步請求購物車商品的成本」
-
-### 🚚 `shipping_ajax(cart, function (shipping) {...})`
-
-- 類似地，這個函式代表「請求這個購物車的運費資訊」
-
-<script setup>
-  import Cart from '/components/Cart.vue'
-</script>
-
-<div style="margin: 20px 0;">
-  <Cart />
-</div>
-
-::right::
-
 ## 🚨 問題：原始代碼的 Race Condition
 
 <div style="background: #fef2f2; padding: 15px; border-radius: 8px; margin-bottom: 15px; color: #000; border-left: 4px solid #ef4444;">
@@ -357,6 +339,24 @@ graph LR
     A3["顯示結果"]
     A0 --- A1 --- A2 --- A3
 ```
+
+📦 `cost_ajax(cart, function (cost) {...})`
+
+- 意思是「用 cart 當作參數，非同步請求購物車商品的成本」
+
+🚚 `shipping_ajax(cart, function (shipping) {...})`
+
+- 類似地，這個函式代表「請求這個購物車的運費資訊」
+
+::right::
+
+<script setup>
+  import Cart from '/components/Cart.vue'
+</script>
+
+<div style="margin: 20px 0;">
+  <Cart />
+</div>
 
 ---
 
@@ -423,6 +423,48 @@ function update_total_queue(cart) {
   // 🚨 將購物車加入佇列
   queue_items.push(cart);
 }
+```
+
+</div>
+
+</div>
+
+---
+
+## 步驟 1：比較圖
+
+<div class="grid grid-cols-2 gap-4">
+
+<div>
+
+### 修改前
+
+```mermaid
+%%{init: {'sequence': {'height': 30}}}%%
+sequenceDiagram
+    participant A as 事件點擊器
+    A->>A: 加入購物車
+    A->>A: cost_ajax()
+    A->>A: shipping_ajax()
+    A->>A: 顯示結果
+```
+
+</div>
+
+<div>
+
+### 修改後
+
+```mermaid
+%%{init: {'sequence': {'height': 30}}}%%
+sequenceDiagram
+    participant A as 事件點擊器
+    participant B as 佇列
+    A->>A: 加入購物車
+    A ->> B: 加入佇列
+    B->>B: cost_ajax()
+    B->>B: shipping_ajax()
+    B->>B: 顯示結果（總金額）
 ```
 
 </div>
@@ -507,6 +549,49 @@ function update_total_queue(cart) {
   queue_items.push(cart);
   setTimeout(runNext, 0);
 }
+```
+
+</div>
+
+</div>
+
+---
+
+## 步驟 2：比較圖
+
+<div class="grid grid-cols-2 gap-4">
+
+<div>
+
+### 修改前
+
+```mermaid
+%%{init: {'sequence': {'height': 30}}}%%
+sequenceDiagram
+    participant A as 事件點擊器
+    participant B as 佇列
+    A->>A: 加入購物車
+    A ->> B: 加入佇列
+    B->>B: cost_ajax()
+    B->>B: shipping_ajax()
+    B->>B: 顯示結果（總金額）
+```
+
+</div>
+
+<div>
+
+### 修改後
+
+```mermaid
+%%{init: {'sequence': {'height': 30}}}%%
+sequenceDiagram
+    participant A as 事件點擊器
+    participant B as 佇列
+    A->>A: 加入購物車
+    A ->> B: 加入佇列
+    B->>B: 購物車事件1
+    B->>B: 購物車事件2
 ```
 
 </div>
@@ -935,7 +1020,7 @@ var update_total_queue = Queue(); // 🚨 實際呼叫 Queue() 的地方。
 
 ---
 
-### 休息一下：佇列的策略
+## 休息一下：佇列的策略
 
 > Q: 想一下生活中有哪些資源是共享的例子？
 
@@ -943,12 +1028,24 @@ var update_total_queue = Queue(); // 🚨 實際呼叫 Queue() 的地方。
 - 公共圖書館：一次可以提供一群人借書
 - 白板：允許一位老師寫白板，同時向整班學生分享資料
 
+### 社會科學：社會資源的分配問題
+
+> 循環經濟（Circular Economy）是一種經濟模式，旨在減少浪費和提高資源利用率，通過循環利用資源，減少對原始材料的依賴，並減少環境影響。
+
+- 腳踏車：買了之後，其他人就不能使用。
+  - 所有權：私有。
+  - 廠商：追求量多、便宜。
+
+- Youbike：由政府提供，但租借就可以使用。
+  - 所有權：政府。
+  - 廠商：追求更好的品質、更長的使用壽命。
+
 ---
 
-## 16.6 讓佇列可以重複使用
+## 16.6 讓佇列可以重複使用 -- 步驟一
 
-<div v-click="1" style="background: #fefce8; padding: 15px; border-radius: 8px; margin-bottom: 15px; color: #000;">
-  <strong>目標</strong>：將著咧走訪有關的功能以 done() 回呼呼叫
+<div  style="background: #fefce8; padding: 15px; border-radius: 8px; margin-bottom: 15px; color: #000;">
+  <strong>目標</strong>：我們要試著把 Queue() 的內部業務邏輯拆出來，讓 Queue() 可以重複使用。
 </div>
 
 <div class="grid grid-cols-2 gap-4 max-h-[300px] overflow-y-scroll">
@@ -1020,6 +1117,290 @@ var update_total_queue = Queue();
 </div>
 
 </div>
+
+---
+
+## 步驟二：Worker 的封裝
+
+<div style="background: #fefce8; padding: 15px; border-radius: 8px; margin-bottom: 15px; color: #000;">
+  <strong>目標</strong>：我們可以把 worker() 拆到 Global scope 來，讓 Queue() 直接使用 worker() 來處理業務邏輯。
+</div>
+
+<div class="grid grid-cols-2 gap-4 max-h-[300px] overflow-y-scroll">
+
+<div>
+
+## 修改前
+
+```js{11-20}
+function Queue() {
+  var queue_items = [];
+  var working = false;
+  function runNext() {
+    if (working) return;
+    if (queue_items.length === 0) return;
+    working = true;
+    var cart = queue_items.shift();
+    calc_cart_total(cart, function (total) {
+      update_total_dom(total);
+
+      function worker(cart, done) {
+        working = false;
+        done();
+      }
+
+      worker(cart, function () {
+        working = false;
+        runNext();
+      });
+    });
+  }
+  return function (cart) {
+    queue_items.push(cart);
+    setTimeout(runNext, 0);
+  };
+}
+var update_total_queue = Queue();
+```
+
+</div>
+
+<div>
+
+## 修改後
+
+```js{11-20}
+function Queue(worker) {
+  var queue_items = [];
+  var working = false;
+  function runNext() {
+    if (working) return;
+    if (queue_items.length === 0) return;
+    working = true;
+    var cart = queue_items.shift();
+    calc_cart_total(cart, function (total) {
+      update_total_dom(total);
+
+      worker(cart, function () {
+        working = false;
+        runNext();
+      });
+    });
+  }
+  return function (cart) {
+    queue_items.push(cart);
+    setTimeout(runNext, 0);
+  };
+}
+
+function calc_cart_worker(cart, done) {
+  calc_cart_total(cart, function (total) {
+    update_total_dom(total);
+    done();
+  });
+}
+
+var update_total_queue = Queue(calc_cart_worker);
+```
+
+</div>
+
+</div>
+
+---
+
+## 步驟三：允許佇列儲存 callback
+
+<div style="background: #fefce8; padding: 15px; border-radius: 8px; margin-bottom: 15px; color: #000;">
+  <strong>目標</strong>：透過將參數名稱通用化為 `item`，可以使用到更多業務情境。
+</div>
+
+<div class="grid grid-cols-2 gap-4 max-h-[300px] overflow-y-scroll">
+
+<div>
+
+## 修改前
+
+```js{11-20}
+function Queue(worker) {
+  var queue_items = [];
+  var working = false;
+  function runNext() {
+    if (working) return;
+    if (queue_items.length === 0) return;
+    working = true;
+    var cart = queue_items.shift();
+    calc_cart_total(cart, function (total) {
+      update_total_dom(total);
+
+      worker(cart, function () {
+        working = false;
+        runNext();
+      });
+    });
+  }
+  return function (cart) {
+    queue_items.push(cart);
+    setTimeout(runNext, 0);
+  };
+}
+
+function calc_cart_worker(cart, done) {
+  calc_cart_total(cart, function (total) {
+    update_total_dom(total);
+    done();
+  });
+}
+
+var update_total_queue = Queue(calc_cart_worker);
+```
+
+</div>
+
+<div>
+
+## 修改後
+
+```js{11-20}
+function Queue(worker) {
+  var queue_items = [];
+  var working = false;
+  function runNext() {
+    if (working) return;
+    if (queue_items.length === 0) return;
+    working = true;
+    var item = queue_items.shift();
+
+    worker(item.data, function () {
+        working = false;
+        runNext();
+      });
+  }
+  return function (data) {
+    queue_items.push({ data } || function () {});
+    setTimeout(runNext, 0);
+  };
+}
+
+function calc_cart_worker(cart, done) {
+  calc_cart_total(cart, function (total) {
+    update_total_dom(total);
+    done();
+  });
+}
+
+var update_total_queue = Queue(calc_cart_worker);
+```
+
+</div>
+
+</div>
+
+---
+
+## 步驟四：當佇列處理完之後，處理 callback
+
+<div style="background: #fefce8; padding: 15px; border-radius: 8px; margin-bottom: 15px; color: #000;">
+  <strong>目標</strong>：透過將參數名稱通用化為 `item`，可以使用到更多業務情境。
+</div>
+
+<div class="grid grid-cols-2 gap-4 max-h-[300px] overflow-y-scroll">
+
+<div>
+
+## 修改前
+
+```js{11-20}
+function Queue(worker) {
+  var queue_items = [];
+  var working = false;
+  function runNext() {
+    if (working) return;
+    if (queue_items.length === 0) return;
+    working = true;
+    var item = queue_items.shift();
+
+    worker(item.data, function () {
+        working = false;
+        runNext();
+      });
+  }
+  return function (data) {
+    queue_items.push({ data } || function () {});
+    setTimeout(runNext, 0);
+  };
+}
+
+function calc_cart_worker(cart, done) {
+  calc_cart_total(cart, function (total) {
+    update_total_dom(total);
+    done();
+  });
+}
+
+var update_total_queue = Queue(calc_cart_worker);
+```
+
+</div>
+
+<div>
+
+## 修改後
+
+```js{11-20}
+function Queue(worker) {
+  var queue_items = [];
+  var working = false;
+  function runNext() {
+    if (working) return;
+    if (queue_items.length === 0) return;
+    working = true;
+    var item = queue_items.shift();
+
+    worker(item.data, function (val) {
+        working = false;
+        setTimeout(item.callback, 0, val);
+        runNext();
+      });
+  }
+  return function (data) {
+    queue_items.push({ data } || function () {});
+    setTimeout(runNext, 0);
+  };
+}
+
+function calc_cart_worker(cart, done) {
+  calc_cart_total(cart, function (total) {
+    update_total_dom(total);
+    done();
+  });
+}
+
+var update_total_queue = Queue(calc_cart_worker);
+```
+
+</div>
+
+</div>
+
+---
+
+## 小結：Queue 的特色
+
+> 能不能請你說明一下 Queue 的特點？
+
+```mermaid
+graph LR
+    F["Front"] --> Q1["Ajax1"]
+    Q1 --> Q2["Ajax2"]
+    Q2 --> R["Rear"]
+    style F fill:#e1f5fe
+    style R fill:#fff3e0
+```
+
+- Queue 的正式名稱一該叫做 linearize() ，意思是『線性化』。
+- 可以賦予雜亂的排序，透過適當的限制，讓可能性只剩下一種。
+- Queue 屬於一種 Concurrency Primitive，可以協調多個非同步操作。
 
 ---
 
@@ -1184,6 +1565,8 @@ function debounce(func, delay, immediate = false) {
 
 </div>
 
+---
+
 ## 🚀 **實際應用**
 
 ```javascript
@@ -1210,12 +1593,6 @@ document.getElementById("search").addEventListener("input", (e) => {
 - **有防抖**：1 次 API 請求 (iPhone)
 
 </div>
-
----
-
-### 章節提問
-
-1. 什麼是 並行語言（Concurrency primitives）？
 
 ---
 layout: center
@@ -1283,40 +1660,12 @@ layout: two-cols
 <img src="/george.jpg" alt="想回家的喬治" style=" width: 100%;">
 
 ---
-layout: two-cols
----
-
-### 修改前（Working）
-
-```js
-function add_item_to_cart(item) {
-  cart = add_item(cart, item);
-  update_total_queue(cart);
-}
-function calc_cart_total(cart, callback) {
-  var total = 0;
-  cost_ajax(cart, function (cost) {
-    total += cost;
-    shipping_ajax(cart, function (shipping) {
-      total += shipping;
-      callback(total);
-    });
-  });
-}
-function calc_cart_worker(cart, done) {
-  calc_cart_total(cart, function (total) {
-    update_total_dom(total);
-    done(total);
-  });
-}
-var update_total_queue = DroppingQueue(1, calc_cart_worker);
-```
-
-::right::
 
 ### 修改後（Not Working）
 
-```js
+> 在修改後，我們能夠同時呼叫 `cost_ajax()` 和 `shipping_ajax()`。
+
+```js{all|7-13}
 function add_item_to_cart(item) {
   cart = add_item(cart, item);
   update_total_queue(cart);
@@ -1342,7 +1691,44 @@ var update_total_queue = DroppingQueue(1, calc_cart_worker);
 
 ---
 
+## 先說結論：因為 `cost_ajax()` 和 `shipping_ajax()` 回傳時間不一樣
+
+```mermaid
+graph LR
+    A[📱 點擊加入購物車] --> B[🚀 同時發起請求]
+
+    B --> C[💰 cost_ajax<br/>⏱️ 3s]
+    B --> D[🚚 shipping_ajax<br/>⏱️ 4s]
+
+    C --> E[💰 cost 結果]
+    D --> F[🚚 shipping 結果]
+
+    E -.-> X[❌ 等待中...]
+    F -.-> X
+    X -.-> G[🔄 DOM 未即時更新]
+
+    style A fill:#e8f5e8
+    style B fill:#fff9c4
+    style C fill:#ffeaa7
+    style D fill:#ffeaa7
+    style X fill:#ff7675,color:#fff
+    style G fill:#ff7675,color:#fff
+```
+
+---
+
 # Q: 哪些是 Actions ?
+
+> Actions 的定義：會隨著時間而改變執行的結果。
+
+1. `cost_ajax(cart, callback)` <span v-click="1" style="color: #000;">✅ API 呼叫</span>
+2. `add_item(cart, item)` <span v-click="1" style="color: #000;">❌ Calculation 計算</span>
+3. `update_total_dom(total)` <span v-click="1" style="color: #000;">✅ DOM 操作</span>
+4. `var total = 0` <span v-click="1" style="color: #000;">✅ 區域變數</span>
+5. `total += cost` <span v-click="1" style="color: #000;">✅ 修改區域變數</span>
+6. `setTimeout(runNext, 0)` <span v-click="1" style="color: #000;">✅ 非同步操作</span>
+7. `Math.max(10, 20)` <span v-click="1" style="color: #000;">❌ Calculation 數學運算</span>
+8. `console.log("完成")` <span v-click="1" style="color: #000;">✅ 輸出結果</span>
 
 ---
 
@@ -1620,11 +2006,169 @@ done();
 
 ## 17.11 在『放入購物車』程式裡應用 Cut()
 
+<section class="grid grid-cols-2 gap-4">
+
+<div>
+
+### 修改前
+
+```js
+function calc_cart_total(cart, callback) {
+  var total = 0;
+  cost_ajax(cart, function (cost) {
+    total += cost;
+  });
+  shipping_ajax(cart, function (shipping) {
+    total += shipping;
+    callback(total);
+  });
+}
+```
+
+</div>
+
+<div class="max-h-[300px] overflow-y-auto">
+
+### 修改後
+
+```js
+function Cut(number, callback) {
+  var num_finished = 0;
+  return function () {
+    num_finished++;
+    if (num_finished === number) {
+      callback();
+    }
+  };
+}
+
+function calc_cart_total(cart, callback) {
+  var total = 0;
+  var done = Cut(2, function () {
+    callback(total);
+  });
+
+  cost_ajax(cart, function (cost) {
+    total += cost;
+    done();
+  });
+  shipping_ajax(cart, function (shipping) {
+    total += shipping;
+    done();
+  });
+}
+```
+
+</div>
+
+</section>
+
+---
+
 ## 17.15 讓 Action 只能執行一次 primitive
+
+> 如果今天我想要讓某個 function 只能執行一次，該怎麼辦？
+
+```js
+function JustOnce(callback) {
+  var is_done = false;
+  if (is_done) return;
+
+  return function () {
+    is_done = true;
+    callback();
+  };
+}
+
+var done = JustOnce(function () {
+  console.log("好誒！今天吃烤雞！");
+});
+
+done(); // 好誒！今天吃烤雞！
+done(); // 不會再執行
+done(); // 不會再執行
+```
+
+---
 
 ## 17.16 隱性 vs 顯性時間模型
 
-TBD
+### 🔍 兩種時間模型對比
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; font-size: 0.9em;">
+
+<div style="background: #fef2f2; padding: 15px; border-radius: 8px; border-left: 4px solid #ef4444;">
+
+### ❌ **隱性時間模型**
+
+_依賴程式語言的執行順序_
+
+- 程式碼順序 = 執行順序
+- 難以預測非同步結果
+- 競態條件難以控制
+- 依賴運氣和時機
+
+```javascript
+// 隱性：依賴 JavaScript 執行順序
+cost_ajax(cart, callback1);
+shipping_ajax(cart, callback2);
+// 😰 不知道誰先完成
+```
+
+</div>
+
+<div style="background: #f0f9ff; padding: 15px; border-radius: 8px; border-left: 4px solid #3b82f6;">
+
+### ✅ **顯性時間模型**
+
+_業務邏輯控制執行順序_
+
+- 明確定義執行條件
+- 可預測的執行結果
+- 主動協調時間線
+- 業務邏輯驅動
+
+```javascript
+// 顯性：用 Cut() 明確協調
+var done = Cut(2, updateDOM);
+cost_ajax(cart, done);
+shipping_ajax(cart, done);
+// 😎 確保兩個都完成才更新
+```
+
+</div>
+
+</div>
+
+---
+
+### 💡 實際應用：從隱性到顯性
+
+<div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+
+#### 🔄 重構步驟
+
+1. **識別時間依賴**：找出有順序要求的操作
+2. **選擇 Primitives**：`Cut()`, `Queue()`, `JustOnce()` 等
+3. **明確協調邏輯**：用程式碼表達業務規則
+4. **測試邊界情況**：確保各種時序都正確
+
+#### 🎯 關鍵原則
+
+> **"讓程式碼表達業務意圖，而不是依賴執行環境的偶然性"**
+
+</div>
+
+---
+
+### 📚 常用的 Concurrency Primitives
+
+| Primitive          | 用途              | 範例場景          |
+| ------------------ | ----------------- | ----------------- |
+| `Cut(n, callback)` | 等待 n 個操作完成 | 等待多個 API 回應 |
+| `Queue()`          | 序列化操作        | 購物車計算排隊    |
+| `JustOnce()`       | 確保只執行一次    | 防止重複提交      |
+| `Timeout()`        | 設定執行期限      | API 超時處理      |
 
 ---
 
@@ -1649,11 +2193,72 @@ TBD
 
 ---
 
-## RE: 上禮拜的小尾巴
+## 上禮拜的小尾巴：[Android 開發者入門手冊](https://developer.android.com/kotlin/coroutines?hl=zh-tw)
 
 > 分層設計回過頭來，都是在處理時間線的問題。
 
 <img src="/developer-guide-kotlin.png" alt="上禮拜的小尾巴" style="width: 100%; object-fit: contain;">
+
+---
+
+## Android 上的登入請求
+
+```kotlin
+sealed class Result<out R> {
+    data class Success<out T>(val data: T) : Result<T>()
+    data class Error(val exception: Exception) : Result<Nothing>()
+}
+
+class LoginRepository(private val responseParser: LoginResponseParser) {
+    private const val loginUrl = "https://example.com/login"
+
+    // Function that makes the network request, blocking the current thread
+    fun makeLoginRequest(
+        jsonBody: String
+    ): Result<LoginResponse> {
+        val url = URL(loginUrl)
+        (url.openConnection() as? HttpURLConnection)?.run {
+            requestMethod = "POST"
+            setRequestProperty("Content-Type", "application/json; utf-8")
+            setRequestProperty("Accept", "application/json")
+            doOutput = true
+            outputStream.write(jsonBody.toByteArray())
+            return Result.Success(responseParser.parse(inputStream))
+        }
+        return Result.Error(Exception("Cannot open HttpURLConnection"))
+    }
+}
+```
+
+---
+
+## 透過 Coroutines 來協調不同 I/O 操作
+
+> Java 同 Javascript 一樣，都是單執行緒的程式語言，因此會被堵住，因此其他 UI 會無法互動。
+
+```kotlin
+
+// 事件綁定(View Model)
+val button: Button = findViewById(R.id.corky)
+
+button.setOnClickListener { view ->
+    login_repository.makeLoginRequest(jsonBody)
+}
+
+// 登入請求
+class LoginRepository(...) {
+    ...
+    suspend fun makeLoginRequest(
+        jsonBody: String
+    ): Result<LoginResponse> {
+
+        // Move the execution of the coroutine to the I/O dispatcher
+        return withContext(Dispatchers.IO) {
+            // Blocking network request code
+        }
+    }
+}
+```
 
 ---
 
@@ -1668,3 +2273,7 @@ TBD
 - 電子書：https://livebook.manning.com/book/grokking-simplicity/chapter-16#1
 
 - [Visualizing algorithms for rate limiting](https://smudge.ai/blog/ratelimit-algorithms)
+
+```
+
+```
