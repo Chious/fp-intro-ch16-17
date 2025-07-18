@@ -149,6 +149,52 @@ layout: two-cols
   - 更新 DOM
 
 ---
+layout: two-cols
+---
+
+## Q: 當有多條時間線時，謝列哪些資源的共享可能會導致問題？
+
+> 競賽條件（Race Condition）指的是，當一個系統或程式的輸出結果，取決於多個不受控制的事件的發生順序或時機，就可能發生競賽條件。
+
+> 💰 違約交割：沒有現金週轉 ：（
+
+> 🧑‍💻 RD 的時間：抱歉工作量都滿囉
+
+1. 全域變數 <span v-click="1">✅</span>
+2. 文件物件模型（DOM） <span v-click="1">✅</span>
+3. Calculation 函式
+4. 區域變數 <span v-click="1">✅</span>
+5. 不可變的數值
+6. 資料庫 <span v-click="1">✅</span>
+7. API 呼叫 <span v-click="1">✅</span>
+
+::right::
+
+<div class='flex items-center h-full' v-click=1 >
+
+```js
+// 1. 全域變數 - 可以被修改
+var globalCart = [];
+
+// 2. DOM - 可以被操作
+document.getElementById('total').innerHTML = '100';
+
+// 3. 區域變數 - 在閉包中可能共享
+function createCounter() {
+  let count = 0; // 被多個函數共享
+  return () => count++;
+}
+
+// 4. 資料庫 - 可以被更新
+UPDATE cart SET total = 150 WHERE id = 1;
+
+// 5. API 呼叫 - 會產生副作用
+fetch('/update-cart', { method: 'POST' });
+```
+
+</div>
+
+---
 
 # Ｑ：請問我該使用哪種資料結構？
 
@@ -294,190 +340,686 @@ layout: two-cols
   <strong>⚠️ 問題描述</strong>：用戶快速點擊時，多個 Ajax 請求同時執行，可能導致資料不一致
 </div>
 
-```js {all|3|7-15}
+```mermaid
+graph LR
+    A0["第一次點擊"]
+    A1["cost_ajax()"]
+    A2["shipping_ajax()"]
+    A3["顯示結果"]
+    A0 --- A1 --- A2 --- A3
+```
+
+```mermaid
+graph LR
+    A0["第二次點擊"]
+    A1["cost_ajax()"]
+    A2["shipping_ajax()"]
+    A3["顯示結果"]
+    A0 --- A1 --- A2 --- A3
+```
+
+---
+
+## 步驟 1：讓點擊處理器能夠將商品加入佇列
+
+<div v-click="1" style="background: #f0f9ff; padding: 15px; border-radius: 8px; margin-bottom: 15px; color: #000;">
+  <strong>目標</strong>：透過 Array 實作佇列，讓購物車事件能夠排隊等待
+</div>
+
+<div v-click="2" class="grid grid-cols-2 gap-4">
+
+<div>
+
+## 修改前
+
+```js
 function add_item_to_cart(item) {
   cart = add_item(cart, item);
-  calc_cart_total(cart, update_total_dom); // 🚨 每次點擊都直接執行
+  calc_cart_total(cart, update_total_dom);
 }
 
 function calc_cart_total(cart, callback) {
   var total = 0;
   cost_ajax(cart, function (cost) {
-    // 💥 非同步執行
+    // 🚨 請求購物車商品的成本
     total += cost;
     shipping_ajax(cart, function (shipping) {
-      // 💥 嵌套非同步
+      // 🚨 請求購物車運費
       total += shipping;
-      callback(total); // 💥 回調更新 DOM
+      callback(total);
     });
   });
 }
 ```
 
----
-
-## 步驟 1：我們需要保證 DOM 更新的順序
-
-<div v-click="1" style="background: #f0f9ff; padding: 15px; border-radius: 8px; margin-bottom: 15px; color: #000;">
-  <strong>目標</strong>：確保第二次點擊不會在第一次點擊完成前開始執行
 </div>
 
-<div v-click="2">
+<div class="overflow-y-scroll h-[350px]">
 
-```js {3-5|7-10}
-// 解決方案：加入佇列和工作狀態標記
-var queue_items = [];
-var working = false;
+## 修改後
 
-function runNext() {
-  if (working) return; // 如果正在工作中，直接返回
-  if (queue_items.length === 0) return; // 如果佇列是空的，直接返回
-  working = true; // 設定工作狀態為 true
+```js {3,18-24}
+function add_item_to_cart(item) {
+  cart = add_item(cart, item);
+  update_total_queue(cart);
+}
 
-  // 從佇列取出第一個項目
-  var cart = queue_items.shift();
-  calc_cart_total(cart, update_total_queue);
+function calc_cart_total(cart, callback) {
+  var total = 0;
+  cost_ajax(cart, function (cost) {
+    // 🚨 請求購物車商品的成本
+    total += cost;
+    shipping_ajax(cart, function (shipping) {
+      // 🚨 請求購物車運費
+      total += shipping;
+      callback(total);
+    });
+  });
+}
+
+var queue_items = []; // 🚨 利用陣列實作佇列
+
+function update_total_queue(cart) {
+  // 🚨 將購物車加入佇列
+  queue_items.push(cart);
 }
 ```
 
 </div>
 
+</div>
+
 ---
 
-## 步驟 2：在 JavaScript 中建立佇列 (Building a queue)
+## 步驟 2：從佇列前端取出待處理的項目
 
 <div v-click="1" style="background: #ecfdf5; padding: 15px; border-radius: 8px; margin-bottom: 15px; color: #000;">
   <strong>關鍵</strong>：修改回調函數以處理下一個佇列項目
 </div>
 
-<div v-click="2">
+<div v-click="2" class="grid grid-cols-2 gap-4">
 
-```js {6-10|12-15}
+<div class="overflow-y-scroll h-[350px]">
+
+## 修改前
+
+```js{3,18-24}
+function add_item_to_cart(item) {
+  cart = add_item(cart, item);
+  update_total_queue(cart);
+}
+
+function calc_cart_total(cart, callback) {
+  var total = 0;
+  cost_ajax(cart, function (cost) {
+    // 🚨 請求購物車商品的成本
+    total += cost;
+    shipping_ajax(cart, function (shipping) {
+      // 🚨 請求購物車運費
+      total += shipping;
+      callback(total);
+    });
+  });
+}
+
+var queue_items = []; // 🚨 利用陣列實作佇列
+
+function update_total_queue(cart) {
+  // 🚨 將購物車加入佇列
+  queue_items.push(cart);
+}
+```
+
+</div>
+
+<div class="overflow-y-scroll h-[350px]">
+
+## 修改後
+
+```js{20-24,29}
+function add_item_to_cart(item) {
+  cart = add_item(cart, item);
+  update_total_queue(cart);
+}
+
+function calc_cart_total(cart, callback) {
+  var total = 0;
+  cost_ajax(cart, function (cost) {
+    // 🚨 請求購物車商品的成本
+    total += cost;
+    shipping_ajax(cart, function (shipping) {
+      // 🚨 請求購物車運費
+      total += shipping;
+      callback(total);
+    });
+  });
+}
+
+var queue_items = []; // 🚨 利用陣列實作佇列
+
 function runNext() {
-  if (working) return;
-  if (queue_items.length === 0) return;
-  working = true;
-
   var cart = queue_items.shift();
-  calc_cart_total(cart, function (total) {
-    update_total_dom(total); // 更新 DOM
-    working = false; // 重設工作狀態
-    runNext(); // 遞迴處理下一個項目
+  calc_cart_total(cart, update_total_dom);
+}
+
+function update_total_queue(cart) {
+  // 🚨 將購物車加入佇列
+  queue_items.push(cart);
+  setTimeout(runNext, 0);
+}
+```
+
+</div>
+
+</div>
+
+---
+
+## 步驟 3：避免第二條時間線和第一條時間線同時發生
+
+<div v-click="1" style="background: #fefce8; padding: 15px; border-radius: 8px; margin-bottom: 15px; color: #000;">
+  <strong>目標</strong>：實作佇列的運作機制。
+</div>
+
+<div v-click="2" class="grid grid-cols-2 gap-4">
+
+<div class="overflow-y-scroll h-[350px]">
+
+## 修改前
+
+```js
+function add_item_to_cart(item) {
+  cart = add_item(cart, item);
+  update_total_queue(cart);
+}
+
+function calc_cart_total(cart, callback) {
+  var total = 0;
+  cost_ajax(cart, function (cost) {
+    // 🚨 請求購物車商品的成本
+    total += cost;
+    shipping_ajax(cart, function (shipping) {
+      // 🚨 請求購物車運費
+      total += shipping;
+      callback(total);
+    });
+  });
+}
+
+var queue_items = []; // 🚨 利用陣列實作佇列
+
+function runNext() {
+  var cart = queue_items.shift();
+  calc_cart_total(cart, update_total_dom);
+}
+
+function update_total_queue(cart) {
+  // 🚨 將購物車加入佇列
+  queue_items.push(cart);
+  setTimeout(runNext, 0);
+}
+```
+
+</div>
+
+<div class="overflow-y-scroll h-[350px]">
+
+## 修改後
+
+```js{20-24,29}
+function add_item_to_cart(item) {
+  cart = add_item(cart, item);
+  update_total_queue(cart);
+}
+
+function calc_cart_total(cart, callback) {
+  var total = 0;
+  cost_ajax(cart, function (cost) {
+    // 🚨 請求購物車商品的成本
+    total += cost;
+    shipping_ajax(cart, function (shipping) {
+      // 🚨 請求購物車運費
+      total += shipping;
+      callback(total);
+    });
+  });
+}
+
+var queue_items = [];
+var working = false; // 🚨 標記是否正在計算
+
+function runNext() {
+  if (working) return; // 🚨 如果正在計算，直接返回
+  working = true; // 🚨 設定工作狀態為 true
+
+  // 🚨 從佇列取出第一個項目
+  var cart = queue_items.shift();
+  calc_cart_total(cart, update_total_dom);
+}
+
+function update_total_queue(cart) {
+  // 🚨 將購物車加入佇列
+  queue_items.push(cart);
+  setTimeout(runNext, 0);
+}
+```
+
+</div>
+
+</div>
+
+---
+
+## 步驟 4：修改 calc_cart_total 讓下一項佇列可以開始
+
+<div v-click="1" style="background: #fefce8; padding: 15px; border-radius: 8px; margin-bottom: 15px; color: #000;">
+  <strong>目標</strong>：利用遞迴(Recursion) 讓下一項佇列可以開始。
+</div>
+
+<div v-click="2" class="grid grid-cols-2 gap-4">
+
+<div class="overflow-y-scroll h-[350px]">
+
+## 修改前
+
+```js
+function add_item_to_cart(item) {
+  cart = add_item(cart, item);
+  update_total_queue(cart);
+}
+
+function calc_cart_total(cart, callback) {
+  var total = 0;
+  cost_ajax(cart, function (cost) {
+    // 🚨 請求購物車商品的成本
+    total += cost;
+    shipping_ajax(cart, function (shipping) {
+      // 🚨 請求購物車運費
+      total += shipping;
+      callback(total);
+    });
+  });
+}
+
+var queue_items = [];
+var working = false; // 🚨 標記是否正在計算
+
+function runNext() {
+  if (working) return; // 🚨 如果正在計算，直接返回
+  working = true; // 🚨 設定工作狀態為 true
+
+  // 🚨 從佇列取出第一個項目
+  var cart = queue_items.shift();
+  calc_cart_total(cart, update_total_dom);
+}
+
+function update_total_queue(cart) {
+  // 🚨 將購物車加入佇列
+  queue_items.push(cart);
+  setTimeout(runNext, 0);
+}
+```
+
+</div>
+
+<div class="overflow-y-scroll h-[350px]">
+
+## 修改後
+
+```js{28-31}
+function add_item_to_cart(item) {
+  cart = add_item(cart, item);
+  update_total_queue(cart);
+}
+
+function calc_cart_total(cart, callback) {
+  var total = 0;
+  cost_ajax(cart, function (cost) {
+    // 🚨 請求購物車商品的成本
+    total += cost;
+    shipping_ajax(cart, function (shipping) {
+      // 🚨 請求購物車運費
+      total += shipping;
+      callback(total);
+    });
+  });
+}
+
+var queue_items = [];
+var working = false; // 🚨 標記是否正在計算
+
+function runNext() {
+  if (working) return; // 🚨 如果正在計算，直接返回
+  working = true; // 🚨 設定工作狀態為 true
+
+  // 🚨 從佇列取出第一個項目
+  var cart = queue_items.shift();
+  calc_cart_total(cart, function (total) { // 🚨 作業已經結束，開始計算下一個
+    working = false;
+    runNext();
   });
 }
 
 function update_total_queue(cart) {
-  queue_items.push(cart); // 將購物車加入佇列
-  setTimeout(runNext, 0); // 非同步啟動佇列處理
+  // 🚨 將購物車加入佇列
+  queue_items.push(cart);
+  setTimeout(runNext, 0);
 }
 ```
 
 </div>
 
+</div>
+
 ---
 
-## 步驟 3：讓佇列可重複使用 (Making the queue reusable)
+## 步驟 5：當陣列已空，便停止走訪
 
 <div v-click="1" style="background: #fefce8; padding: 15px; border-radius: 8px; margin-bottom: 15px; color: #000;">
-  <strong>重構</strong>：將佇列邏輯包裝成可重複使用的函數
+  <strong>目標</strong>：如果佇列（Queue）已空，代表待辦事項已經全部完成，不應該觸發 runNext()。
 </div>
 
-<div v-click="2">
+<div v-click="2" class="grid grid-cols-2 gap-4">
 
-```js {1|3-4|6-15|17-21}
-function Queue(worker) {
-  // 私有變數
-  var queue_items = [];
-  var working = false;
+<div class="overflow-y-scroll h-[350px]">
 
-  function runNext() {
-    if (working) return;
-    if (queue_items.length === 0) return;
-    working = true;
+## 修改前
 
-    var item = queue_items.shift();
-    worker(item, function (val) {
-      working = false;
-      runNext();
+```js
+function add_item_to_cart(item) {
+  cart = add_item(cart, item);
+  update_total_queue(cart);
+}
+
+function calc_cart_total(cart, callback) {
+  var total = 0;
+  cost_ajax(cart, function (cost) {
+    // 🚨 請求購物車商品的成本
+    total += cost;
+    shipping_ajax(cart, function (shipping) {
+      // 🚨 請求購物車運費
+      total += shipping;
+      callback(total);
     });
-  }
+  });
+}
 
-  return function (item) {
-    queue_items.push(item);
-    setTimeout(runNext, 0);
-  };
+var queue_items = [];
+var working = false; // 🚨 標記是否正在計算
+
+function runNext() {
+  if (working) return; // 🚨 如果正在計算，直接返回
+  working = true; // 🚨 設定工作狀態為 true
+
+  // 🚨 從佇列取出第一個項目
+  var cart = queue_items.shift();
+  calc_cart_total(cart, function (total) {
+    // 🚨 作業已經結束，開始計算下一個
+    working = false;
+    runNext();
+  });
+}
+
+function update_total_queue(cart) {
+  // 🚨 將購物車加入佇列
+  queue_items.push(cart);
+  setTimeout(runNext, 0);
 }
 ```
 
 </div>
 
-<div v-click="3">
+<div class="overflow-y-scroll h-[350px]">
+
+## 修改後
+
+```js{24}
+function add_item_to_cart(item) {
+  cart = add_item(cart, item);
+  update_total_queue(cart);
+}
+
+function calc_cart_total(cart, callback) {
+  var total = 0;
+  cost_ajax(cart, function (cost) {
+    // 🚨 請求購物車商品的成本
+    total += cost;
+    shipping_ajax(cart, function (shipping) {
+      // 🚨 請求購物車運費
+      total += shipping;
+      callback(total);
+    });
+  });
+}
+
+var queue_items = [];
+var working = false; // 🚨 標記是否正在計算
+
+function runNext() {
+  if (working) return; // 🚨 如果正在計算，直接返回
+  if (queue_items.length === 0) return; // 🚨 如果佇列是空的，直接返回
+  working = true; // 🚨 設定工作狀態為 true
+
+  // 🚨 從佇列取出第一個項目
+  var cart = queue_items.shift();
+  calc_cart_total(cart, function (total) { // 🚨 作業已經結束，開始計算下一個
+    working = false;
+    runNext();
+  });
+}
+
+function update_total_queue(cart) {
+  // 🚨 將購物車加入佇列
+  queue_items.push(cart);
+  setTimeout(runNext, 0);
+}
+```
+
+</div>
+
+</div>
+
+---
+
+## 步驟 6：封裝佇列的運作機制
+
+<div v-click="1" style="background: #fefce8; padding: 15px; border-radius: 8px; margin-bottom: 15px; color: #000;">
+  <strong>目標</strong>：目前佇列涵式散落在 global scope，為了避免被其他方法意外修改，應該要調整成只能讓 Queue() 內部修改。
+</div>
+
+<div v-click="2" class="grid grid-cols-2 gap-4">
+
+<div class="overflow-y-scroll h-[350px]">
+
+## 修改前
 
 ```js
-// 使用通用佇列
-var update_total_queue = Queue(function (cart, done) {
-  calc_cart_total(cart, function (total) {
-    update_total_dom(total);
-    done();
+function add_item_to_cart(item) {
+  cart = add_item(cart, item);
+  update_total_queue(cart);
+}
+
+function calc_cart_total(cart, callback) {
+  var total = 0;
+  cost_ajax(cart, function (cost) {
+    // 🚨 請求購物車商品的成本
+    total += cost;
+    shipping_ajax(cart, function (shipping) {
+      // 🚨 請求購物車運費
+      total += shipping;
+      callback(total);
+    });
   });
-});
+}
+
+var queue_items = [];
+var working = false; // 🚨 標記是否正在計算
+
+function runNext() {
+  if (working) return; // 🚨 如果正在計算，直接返回
+  if (queue_items.length === 0) return; // 🚨 如果佇列是空的，直接返回
+  working = true; // 🚨 設定工作狀態為 true
+
+  // 🚨 從佇列取出第一個項目
+  var cart = queue_items.shift();
+  calc_cart_total(cart, function (total) {
+    // 🚨 作業已經結束，開始計算下一個
+    working = false;
+    runNext();
+  });
+}
+
+function update_total_queue(cart) {
+  // 🚨 將購物車加入佇列
+  queue_items.push(cart);
+  setTimeout(runNext, 0);
+}
 ```
+
+</div>
+
+<div class="overflow-y-scroll h-[350px]">
+
+## 修改後
+
+```js{19-45}
+function add_item_to_cart(item) {
+  cart = add_item(cart, item);
+  update_total_queue(cart);
+}
+
+function calc_cart_total(cart, callback) {
+  var total = 0;
+  cost_ajax(cart, function (cost) {
+    // 🚨 請求購物車商品的成本
+    total += cost;
+    shipping_ajax(cart, function (shipping) {
+      // 🚨 請求購物車運費
+      total += shipping;
+      callback(total);
+    });
+  });
+}
+
+function Queue() {
+
+var queue_items = [];
+var working = false; // 🚨 標記是否正在計算
+
+function runNext() {
+  if (working) return; // 🚨 如果正在計算，直接返回
+  if (queue_items.length === 0) return; // 🚨 如果佇列是空的，直接返回
+  working = true; // 🚨 設定工作狀態為 true
+
+  // 🚨 從佇列取出第一個項目
+  var cart = queue_items.shift();
+  calc_cart_total(cart, function (total) { // 🚨 作業已經結束，開始計算下一個
+    working = false;
+    runNext();
+  });
+}
+
+return function (cart) {
+  // 🚨 將購物車加入佇列
+  queue_items.push(cart);
+  setTimeout(runNext, 0);
+  };
+};
+
+var update_total_queue = Queue(); // 🚨 實際呼叫 Queue() 的地方。
+```
+
+</div>
 
 </div>
 
 ---
 
-## 步驟 4：分析時間線 (Analyzing the timeline)
-
-<div style="background: #f3f4f6; padding: 20px; border-radius: 8px; color: #000;">
-
-<div v-click="1">
-
-### 🔍 **Before (原始碼)：多條時間線**
-
-</div>
-
-<div v-click="2" style="font-family: monospace; background: #fef2f2; padding: 10px; margin: 10px 0; border-radius: 4px;">
-
-```
-Click 1: |--cost_ajax--|--shipping_ajax--|--update_DOM--|
-Click 2:      |--cost_ajax--|--shipping_ajax--|--update_DOM--|
-Click 3:           |--cost_ajax--|--shipping_ajax--|--update_DOM--|
-         ⚠️ 可能造成 DOM 更新順序錯亂
-```
-
-</div>
-
-<div v-click="3">
-
-### ✅ **After (佇列)：單一時間線**
-
-</div>
-
-<div v-click="4" style="font-family: monospace; background: #f0fdf4; padding: 10px; margin: 10px 0; border-radius: 4px;">
-
-```
-Queue: |--Request 1--|--Request 2--|--Request 3--|
-       ✅ 依序執行，保證 DOM 更新順序正確
-```
-
-</div>
-
-</div>
-
-<div v-click="5" style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); padding: 15px; border-radius: 8px; margin-top: 20px; color: #000;">
-  <strong>✨ 結果</strong>：佇列將多條時間線合併成單一時間線，確保共享資源 (DOM) 的安全存取
-</div>
-
----
-
-### 佇列的策略
+### 休息一下：佇列的策略
 
 > Q: 想一下生活中有哪些資源是共享的例子？
 
 - 廁所的鎖：講門鎖上鎖之後，其他人就不能進入
 - 公共圖書館：一次可以提供一群人借書
 - 白板：允許一位老師寫白板，同時向整班學生分享資料
+
+---
+
+## 16.6 讓佇列可以重複使用
+
+<div v-click="1" style="background: #fefce8; padding: 15px; border-radius: 8px; margin-bottom: 15px; color: #000;">
+  <strong>目標</strong>：將著咧走訪有關的功能以 done() 回呼呼叫
+</div>
+
+<div class="grid grid-cols-2 gap-4 max-h-[300px] overflow-y-scroll">
+
+<div>
+
+## 修改前
+
+```js{11-12}
+function Queue() {
+  var queue_items = [];
+  var working = false;
+  function runNext() {
+    if (working) return;
+    if (queue_items.length === 0) return;
+    working = true;
+    var cart = queue_items.shift();
+    calc_cart_total(cart, function (total) {
+      update_total_dom(total);
+      working = false; // 主要控走訪的區塊
+      runNext();
+    });
+  }
+  return function (cart) {
+    queue_items.push(cart);
+    setTimeout(runNext, 0);
+  };
+}
+var update_total_queue = Queue();
+```
+
+</div>
+
+<div>
+
+## 修改後
+
+```js{11-20}
+function Queue() {
+  var queue_items = [];
+  var working = false;
+  function runNext() {
+    if (working) return;
+    if (queue_items.length === 0) return;
+    working = true;
+    var cart = queue_items.shift();
+    calc_cart_total(cart, function (total) {
+      update_total_dom(total);
+
+      function worker(cart, done) {
+        working = false;
+        done();
+      }
+
+      worker(cart, function () {
+        working = false;
+        runNext();
+      });
+    });
+  }
+  return function (cart) {
+    queue_items.push(cart);
+    setTimeout(runNext, 0);
+  };
+}
+var update_total_queue = Queue();
+```
+
+</div>
+
+</div>
 
 ---
 
@@ -673,17 +1215,7 @@ document.getElementById("search").addEventListener("input", (e) => {
 
 ### 章節提問
 
-1. 當有多條時間線時，謝列哪些資源的共享可能會導致問題？
-
-- 全域變數
-- 文件物件模型（DOM）
-- Calculation 函式
-- 區域變數
-- 不可變的數值
-- 資料庫
-- API 呼叫
-
-2. 什麼是 並行語言（Concurrency primitives）？
+1. 什麼是 並行語言（Concurrency primitives）？
 
 ---
 layout: center
