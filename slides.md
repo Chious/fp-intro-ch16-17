@@ -24,11 +24,42 @@ background: https://cover.sli.dev
 
 ---
 
+<section class="grid grid-cols-2 gap-4">
+
+<div>
+<img src="/bike.png" alt="鐵馬環島" class="w-4/5 mx-auto">
+</div>
+
+<div>
+
+## 關於我
+
+- [Sam Chiou](https://sam-dev.space)
+- 前端工程師（React）
+- 爬山、旅遊、煮飯
+
+### 最近的書單
+
+- 《內行人才知道的系統設計面試指南》
+- Vitest & 單元測試
+- 面試～～～ [《徵集前端技術面試陪練小夥伴》](https://hackmd.io/eaQ4jeIfTIShJwrHJJ978w)
+
+</div>
+
+</section>
+
+---
+
 # 目錄
 
 - [上週回顧](#上週回顧)
+  - 補充上禮拜沒講到的小尾巴
 - [Ch16. 多條時間線共享資源](#ch16-多條時間線共享資源)
+  - Concurrency Primitives：介紹如何套用時間線的概念
+  - 介紹 Queue 的資料結構
 - [Ch17. 協調時間線](#ch17-協調時間線)
+  - Concurrency Primitives（續）：時間線模型的變形
+  - 介紹 Cut() 模型
 
 ---
 
@@ -71,6 +102,11 @@ const handleStationChange = (option) => {
     <span v-else style="color: #718096; font-style: italic;">尚未選擇</span>
   </div>
 </div>
+
+```text
+GET /api/show-list // 取得節目列表
+GET /api/user/favorite-show // 取得特定使用者喜歡的節目
+```
 
 ::right::
 
@@ -1476,6 +1512,88 @@ graph TD
 </div>
 
 ---
+layout: two-cols
+---
+
+# 16.9 Queue 的小尾巴：DroppingQueue
+
+<div style="background: #fefce8; padding: 15px; border-radius: 8px; margin-bottom: 15px; color: #000;">
+  <strong>目標</strong>：如果使用者連續點擊多次怎麼辦？每個事件都要處理嗎？
+</div>
+
+```mermaid
+graph TD
+    C["5次快速點擊"] --檢查佇列工作量--> Q1[Queue 🔍]
+    Q1 --> E1[執行 1 次]
+    style E1 fill:#dbeafe
+```
+
+::right::
+
+## 可放棄的資料佇列
+
+<div class="max-h-[400px] overflow-y-scroll">
+
+```js{all|1,22-25,37-55}
+function DroppingQueue(max_size, worker) {
+  var queue_items = [];
+  var working = false;
+  function runNext() {
+    if (working) return;
+    if (queue_items.length === 0) return;
+  }
+
+  working = true;
+
+  var item = queue_items.shift();
+  worker(item.data, function (val) {
+    working = false;
+    setTimeout(item.callback, 0, val);
+    runNext();
+  });
+
+
+  return function (data) {
+    queue_items.push({ data } || function () {});
+
+    while (queue_items.length > max_size) {
+      queue_items.shift();
+    }
+
+    setTimeout(runNext, 0);
+  };
+}
+
+function calc_cart_worker(cart, done) {
+  calc_cart_total(cart, function (total) {
+    update_total_dom(total);
+    done();
+  });
+}
+
+// 最多只會有 1 個資料在佇列中，多的事件會被丟棄
+var update_total_queue = DroppingQueue(1, calc_cart_worker);
+
+update_total_queue({
+  data: {
+    item: "iPhone",
+    price: 100,
+  },
+});
+
+// 不會觸發
+update_total_queue({
+  data: {
+    item: "iPhone Max Pro",
+    price: 1000,
+  },
+});
+
+```
+
+</div>
+
+---
 
 ### 💡 實際應用建議
 
@@ -1509,7 +1627,7 @@ graph TD
 
 ## 回家練習
 
-- [前往 Google 文件](https://g.co/kgs/sGbcYRs)
+- [前往 Codepen 練習](https://codepen.io/Chious/pen/dPYMaRj)
 
 ---
 
@@ -1593,6 +1711,221 @@ document.getElementById("search").addEventListener("input", (e) => {
 - **有防抖**：1 次 API 請求 (iPhone)
 
 </div>
+
+---
+
+# Ch16 小結
+
+<div style="background: #fefce8; padding: 15px; border-radius: 8px; margin-bottom: 15px; color: #000;">
+  <strong>重點</strong>：透過 Queue 的資料結構，限縮了多元宇宙（？）發生的可能，賦予了 Actions『時間』的特性。
+</div>
+
+- 與 Action 執行順序有關的問題很難重現，且往往能躲過測試。使用時間線圖分析，將他們揪出來。
+- Concurrency Primitives 通常是能處理 Actions 的高階函式，能夠賦予 Actions 超能力！
+- 複習如何透過 FP 重構程式碼 -- 通用化、拆 callback 等。
+
+❓ 為什麼不使用 Promise 來處理？
+
+Ans: 因為這本書主要專注在 FP，Concurreny Primitives 並不限制於 Javascript 實作。
+
+## 章節問題
+
+1. 日常開發中有哪些需要安排前後順序（避免 Race Condition）的例子嗎？
+2. 在 React 實際開發中不會真的去畫時間線，同時可以如何安排非同步的程式碼，讓 Vitest 更好測試？
+3. 解釋 Concurrency Primitives 是什麼？
+
+---
+
+# AI 蝦問：如何做單元測試？
+
+<div style="background: #fefce8; padding: 15px; border-radius: 8px; margin-bottom: 15px; color: #000;">
+  <strong>問題</strong>：「在 React 或實際開發中不會真的去畫時間線圖，那這句話是不是太理論了？要怎麼實際應用？」
+</div>
+
+<article class="max-h-[400px] overflow-y-scroll p-4">
+
+> 1. `fetch` 發出來了嗎？（request 發動）
+> 2. `fetch` 回來後，資料有被正確處理嗎？（資料處理、UI 更新）
+> 3. `fetch` 出錯時，我的錯誤處理機制有觸發嗎？
+> 4. 多次 `fetch` 時，處理順序會不會影響最終結果？（race condition）
+
+| 層級              | 關注點       | 測試方式           | 測試重點         |
+| ----------------- | ------------ | ------------------ | ---------------- |
+| Pure logic        | 無副作用     | 單元測試           | 入出對應         |
+| 副作用封裝        | 請求本身     | mock fetch         | 請求成功/失敗    |
+| Hook / controller | 狀態變化流程 | 測 loading / error | 狀態流程         |
+| UI 元件           | 呈現正確畫面 | `render`, `screen` | 使用者看到的東西 |
+
+## 🎯 範例情境：關鍵字搜尋 (Search)
+
+使用者輸入關鍵字，會：
+
+1. debounce 後發送搜尋 API（`/api/search?q=xxx`）
+2. 顯示 loading 或錯誤
+3. 成功後渲染搜尋結果清單
+
+## 🔹層級 1：純資料邏輯（Pure Logic）
+
+### 📦 負責邏輯：
+
+把 raw API response 轉換為前端想要的格式
+
+```ts
+// utils/parseSearchResult.ts
+export function parseSearchResult(data: any): string[] {
+  return data.results?.map((item: any) => item.title) ?? [];
+}
+```
+
+### ✅ 測試範例：
+
+```ts
+test("parse search results correctly", () => {
+  const input = { results: [{ title: "React" }, { title: "Vue" }] };
+  expect(parseSearchResult(input)).toEqual(["React", "Vue"]);
+});
+```
+
+> 💡 **好測**，因為是純函式、無依賴。
+
+## 🔹層級 2：副作用封裝層（fetch / axios）
+
+### 📦 負責發送 API 請求
+
+```ts
+// api/search.ts
+export async function fetchSearchResults(query: string): Promise<any> {
+  const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+  if (!res.ok) throw new Error("Search failed");
+  return res.json();
+}
+```
+
+### ✅ 測試範例（mock fetch）：
+
+```ts
+import { fetchSearchResults } from "./search";
+
+test("fetchSearchResults returns data", async () => {
+  global.fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve({ results: [{ title: "React" }] }),
+  });
+
+  const data = await fetchSearchResults("react");
+  expect(data.results[0].title).toBe("React");
+});
+```
+
+> 💡 不測內部網路，只測「這個 function 有正確處理 fetch」。
+
+## 🔹層級 3：整合層（hook / controller）
+
+### 📦 負責 loading / error 狀態管理、使用 debounce
+
+```ts
+// hooks/useSearch.ts
+import { useState, useEffect } from "react";
+import { fetchSearchResults } from "@/api/search";
+import { parseSearchResult } from "@/utils/parseSearchResult";
+
+export function useSearch(keyword: string) {
+  const [results, setResults] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<null | string>(null);
+
+  useEffect(() => {
+    if (!keyword) return;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      setLoading(true);
+      fetchSearchResults(keyword)
+        .then((data) => setResults(parseSearchResult(data)))
+        .catch((err) => setError(err.message))
+        .finally(() => setLoading(false));
+    }, 500);
+
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [keyword]);
+
+  return { results, loading, error };
+}
+```
+
+### ✅ 測試方式：狀態變化流程（mock fetch + fake timer）
+
+```ts
+import { renderHook } from "@testing-library/react";
+import { useSearch } from "./useSearch";
+import { vi } from "vitest";
+
+vi.useFakeTimers();
+
+test("search works with debounce and returns results", async () => {
+  global.fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve({ results: [{ title: "React" }] }),
+  });
+
+  const { result } = renderHook(() => useSearch("react"));
+
+  expect(result.current.loading).toBe(false);
+  vi.advanceTimersByTime(500);
+
+  await vi.runAllTimersAsync();
+
+  expect(result.current.loading).toBe(false);
+  expect(result.current.results).toEqual(["React"]);
+});
+```
+
+> 💡 測試 debounce + 狀態變化，是 hook 層的測試精髓。
+
+## 🔹層級 4：UI 元件層
+
+### 📦 負責顯示資料、錯誤、loading
+
+```tsx
+// components/SearchBox.tsx
+export function SearchBox({ keyword }: { keyword: string }) {
+  const { results, loading, error } = useSearch(keyword);
+
+  if (loading) return <p>Loading...</p>;
+  if (error) return <p>Error: {error}</p>;
+
+  return (
+    <ul>
+      {results.map((r) => (
+        <li key={r}>{r}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### ✅ 測試方式：畫面內容（搭配 `@testing-library/react`）
+
+```ts
+test('shows results when done', async () => {
+  global.fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve({ results: [{ title: 'React' }] }),
+  })
+
+  render(<SearchBox keyword="react" />)
+  expect(screen.getByText(/Loading.../i)).toBeInTheDocument()
+
+  await screen.findByText('React') // 等結果出現
+})
+```
+
+> 💡 重點：UI 層不要測「資料處理」與「fetch」，只測畫面行為即可。
+
+</article>
 
 ---
 layout: center
@@ -2174,22 +2507,19 @@ shipping_ajax(cart, done);
 
 # 17.17 小結：操作時間線的技巧
 
-### 1. 減少時間線的數量
-
-### 2. 減少時間線上的 Actions 的數量
-
-### 3. 減少共享的資源
-
-### 4. 利用 Concurrency primitives 來共享資源
-
-### 5. 利用 Concurrency primitives 協調時間線
+| 原則                      | 說明                                     | 範例         |
+| ------------------------- | ---------------------------------------- | ------------ |
+| ✅ 時間線數量越少越好     | 時間線數量越少，程式碼越容易理解         | 重構 Actions |
+| ✅ 時間線上的步驟越少越好 | 時間線上的步驟越少，程式碼越容易理解     | 重構 Actions |
+| ✅ 資源共享越少越好       | 資源共享越少，程式碼越容易理解           | 全域 -> 區域 |
+| ✅ 協調有共享資源的時間線 | 協調有共享資源的時間線，程式碼越容易理解 | 套用事件佇列 |
+| ✅ 更改程式的時間模型     | 更改程式的時間模型，程式碼越容易理解     |              |
 
 ---
 
 # 下週預告
 
 - Ch18. 反應式設計與洋蔥架構
-- Ch19. 踏上函數式設計之途
 
 ---
 
@@ -2262,18 +2592,8 @@ class LoginRepository(...) {
 
 ---
 
-## Murmur
-
-- 後端指的『高併發』、與前端的狀況一樣嗎？
-
----
-
 # 參考資料
 
 - 電子書：https://livebook.manning.com/book/grokking-simplicity/chapter-16#1
 
 - [Visualizing algorithms for rate limiting](https://smudge.ai/blog/ratelimit-algorithms)
-
-```
-
-```
