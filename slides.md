@@ -136,7 +136,7 @@ layout: two-cols
 
 - `增加函數的可重用性`：隱性輸入 -> 顯性輸入/輸出
 
-```js{all|1}
+```js
 function calc_cart_total(cart, callback) {
   var total = 0;
   cost_ajax(cart, function (cost) {
@@ -1090,7 +1090,7 @@ var update_total_queue = Queue(); // 🚨 實際呼叫 Queue() 的地方。
 
 ## 修改前
 
-```js{11-12}
+```js
 function Queue() {
   var queue_items = [];
   var working = false;
@@ -1132,8 +1132,10 @@ function Queue() {
       update_total_dom(total);
 
       function worker(cart, done) {
-        working = false;
-        done();
+        calc_cart_total(cart, function (total) {
+          update_total_dom(total);
+          done();
+        });
       }
 
       worker(cart, function () {
@@ -1168,7 +1170,7 @@ var update_total_queue = Queue();
 
 ## 修改前
 
-```js{11-20}
+```js{11-17}
 function Queue() {
   var queue_items = [];
   var working = false;
@@ -1181,8 +1183,10 @@ function Queue() {
       update_total_dom(total);
 
       function worker(cart, done) {
-        working = false;
-        done();
+        calc_cart_total(cart, function (total) {
+          update_total_dom(total);
+          done();
+        });
       }
 
       worker(cart, function () {
@@ -1205,7 +1209,7 @@ var update_total_queue = Queue();
 
 ## 修改後
 
-```js{11-20}
+```js{1,22-35}
 function Queue(worker) {
   var queue_items = [];
   var working = false;
@@ -1257,7 +1261,7 @@ var update_total_queue = Queue(calc_cart_worker);
 
 ## 修改前
 
-```js{11-20}
+```js{8-22}
 function Queue(worker) {
   var queue_items = [];
   var working = false;
@@ -1297,7 +1301,7 @@ var update_total_queue = Queue(calc_cart_worker);
 
 ## 修改後
 
-```js{11-20}
+```js{8-20}
 function Queue(worker) {
   var queue_items = [];
   var working = false;
@@ -1305,14 +1309,14 @@ function Queue(worker) {
     if (working) return;
     if (queue_items.length === 0) return;
     working = true;
-    var item = queue_items.shift();
+    var item = queue_items.shift(); // 這邊將 cart -> item
 
     worker(item.data, function () {
         working = false;
         runNext();
       });
   }
-  return function (data) {
+  return function (data) { // 這邊將 cart -> data
     queue_items.push({ data } || function () {});
     setTimeout(runNext, 0);
   };
@@ -1334,10 +1338,10 @@ var update_total_queue = Queue(calc_cart_worker);
 
 ---
 
-## 步驟四：當佇列處理完之後，處理 callback
+## 步驟四：當佇列處理完之後，呼叫 callback
 
 <div style="background: #fefce8; padding: 15px; border-radius: 8px; margin-bottom: 15px; color: #000;">
-  <strong>目標</strong>：透過將參數名稱通用化為 `item`，可以使用到更多業務情境。
+  <strong>目標</strong>：將 callback 參數傳入，讓購物車可以透過回傳的 total 來更新總金額。
 </div>
 
 <div class="grid grid-cols-2 gap-4 max-h-[300px] overflow-y-scroll">
@@ -1346,7 +1350,7 @@ var update_total_queue = Queue(calc_cart_worker);
 
 ## 修改前
 
-```js{11-20}
+```js
 function Queue(worker) {
   var queue_items = [];
   var working = false;
@@ -1357,9 +1361,9 @@ function Queue(worker) {
     var item = queue_items.shift();
 
     worker(item.data, function () {
-        working = false;
-        runNext();
-      });
+      working = false;
+      runNext();
+    });
   }
   return function (data) {
     queue_items.push({ data } || function () {});
@@ -1383,7 +1387,7 @@ var update_total_queue = Queue(calc_cart_worker);
 
 ## 修改後
 
-```js{11-20}
+```js{12}
 function Queue(worker) {
   var queue_items = [];
   var working = false;
